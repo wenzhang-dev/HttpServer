@@ -3,7 +3,7 @@ DIR_TEST := test
 DIR_OBJ := build
 
 CXX := g++
-CFLAGS := -g -O0 -Wall -std=c++11
+CFLAGS := -g -O2 -Wall -std=c++11
 LIBS := -lpthread
 INCLUDES := $(shell pwd)/code
 
