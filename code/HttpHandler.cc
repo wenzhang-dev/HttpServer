@@ -1,11 +1,19 @@
 #include "HttpHandler.h"
 
+#include <string>
+#include <sys/socket.h>
 #include <cassert>
-
+#include <sys/mman.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+	   
 #include "Channel.h"
 #include "HttpConnection.h"
 #include "EventLoop.h"
 #include "macros.h"
+#include "config.h"
 
 namespace webserver
 {
@@ -17,22 +25,21 @@ HttpHandler::HttpHandler(EventLoop *loop, int connfd)
 	: loop_(loop),
 	  connfd_(connfd),
 	  connection_(new HttpConnection(loop_, connfd_)),
-	  state_(kStart)
+	  state_(kStart),
+	  keepAlive_(false)
 {
 	assert(connfd_ > 0);
 }
 
 HttpHandler::~HttpHandler()
 {
-	printf("dtor HttpHandler\n");
+	//printf("dtor HttpHandler\n");
 }
 
-//在当前event loop
-//仅被调用一次
+//在当前event loop中，仅被调用一次
 void HttpHandler::newConnection()
 {
 	std::shared_ptr<Channel> channel = connection_->getChannel();
-	loop_->addHttpConnection(shared_from_this(), channel);
 	
 	connection_->setDefaultCallback();
 	connection_->setHolder(shared_from_this());
@@ -40,21 +47,25 @@ void HttpHandler::newConnection()
 }
 
 /* HTTP 1.1: 多个Http请求，不能重叠执行 */
+/* 解析Http协议时，使用正则子表达式，可能会更加清晰 */
 void HttpHandler::handleHttpReq()
 {
-	printf("handleHttpReq\n");
-		
+	/* bpos当前位置，epos下一行位置 */
+	int bpos = 0, epos = 0;
+	
 	/* ROV优化, 不必忧心效率 */
 	std::string buffer = connection_->getRecvBuffer();
-	//printf("buffer empty: %s\n", buffer.size()==0?"True":"False");
+	HttpConnection::ConnState connState = connection_->getState();
+	if(connState == HttpConnection::kError)
+	{
+		state_ = kStart;	/* 跳过解析环节，回复404 bad request */
+		goto __err;
+	}
 	
-	/* bpos当前位置，epos下一行位置 */
-	int bpos = 0;
-	int epos = praseUrl(buffer, bpos);
+	epos = praseUrl(buffer, bpos);
 	if(unlikely(epos < 0))
 	{
-		//错误处理, 设置状态 bad request
-		state_ = kPraseUrl;
+		state_ = kPraseUrl;	//错误处理, 设置状态 bad request
 		goto __err;
 	}
 	
@@ -62,7 +73,6 @@ void HttpHandler::handleHttpReq()
 	epos = praseHeader(buffer, bpos);
 	if(unlikely(epos < 0))
 	{
-		//错误处理, 设置状态 bad request
 		state_ = kPraseHeader;
 		goto __err;
 	}
@@ -71,7 +81,6 @@ void HttpHandler::handleHttpReq()
 	epos = praseBody(buffer, bpos);
 	if(unlikely(epos < 0))
 	{
-		//错误处理, 设置状态 bad request
 		state_ = kPraseBody;
 		goto __err;
 	}
@@ -81,8 +90,8 @@ __err:
 	/* 根据解析状态，返回结果 */
 	responseReq();
 	
-	/* keepAlive? 连接处理：断开 or 保持 */
-	
+	/* 连接处理：断开 or 保持 */
+	keepAliveHandle();
 }
 
 /* 解析请求行，发生错误时返回-1，否则返回Header的索引位置 */
@@ -95,24 +104,26 @@ int HttpHandler::praseUrl(std::string &buf, int bpos)
 	/* 解析请求方法 */
 	std::string::size_type space = buf.find(" ", bpos);
 	if(space == std::string::npos || space > epos) return -1;
-	
 	setMethod(buf.substr(bpos, space-bpos));
-	printf("method:%s\n", kMethod[method_]);
 	if(kMethod[method_] == std::string("Unknown")) return -1;
 	
 	/* 解析请求资源路径 */
 	bpos = space+1;
 	space = buf.find(" ", bpos);
 	if(space == std::string::npos || space > epos) return -1;
-	
 	setPath(buf.substr(bpos, space-bpos));
-	printf("path:%s\n", path_.c_str());
 	
 	/* 解析Http版本号 */
 	bpos = space+1;
 	setVersion(buf.substr(bpos, epos-bpos));
-	printf("version:%s\n", kVersion[version_]);
 	if(kVersion[version_] == std::string("Unknown")) return -1;
+	if(version_ == kHttpV11) keepAlive_=true;
+
+#if DEBUG
+	printf("method:%s\n", kMethod[method_]);
+	printf("path:%s\n", path_.c_str());
+	printf("version:%s\n", kVersion[version_]);
+#endif
 	
 	return epos+2;
 }
@@ -124,8 +135,6 @@ int HttpHandler::praseHeader(std::string &buf, int bpos)
 	
 	while(static_cast<int>(epos = buf.find("\r\n", bpos)) != bpos)
 	{
-		//printf("%s\n", buf.substr(bpos, epos-bpos).c_str());
-		
 		std::string::size_type sep = buf.find(":", bpos);
 		if(sep == std::string::npos || sep > epos) return -1;
 		
@@ -141,10 +150,20 @@ int HttpHandler::praseHeader(std::string &buf, int bpos)
 		bpos = epos+2;
 	}
 	
+	/* Keepalive判断 */
+	if(header_.count("Connection") && 
+	  (header_["Connection"] == "keep-alive" || 
+	   header_["Connection"] == "Keep-Alive"))
+	{ 
+		keepAlive_ = true; 
+	}
+
+#if DEBUG
 	for(auto &p : header_)
 	{
 		printf("%s: %s\n", p.first.c_str(), p.second.c_str());
 	}
+#endif
 
 	return epos+2;
 }
@@ -163,34 +182,149 @@ int HttpHandler::praseBody(std::string &buf, int bpos)
 	
 	/* inefficient!! */
 	body_ = buf.substr(bpos);
-	printf("body:%s\n", body_.c_str());
+	
+#if DEBUG
+	printf("body: %s\n", body_.c_str());
+#endif
 
 	return 0;
 }
 
-void HttpHandler::responseReq()
+/* 应答异常请求 */
+void HttpHandler::badRequest(int num, const std::string &note)
+{
+	std::string body;
+	std::string header;
+	
+	header += "HTTP/1.1 " + std::to_string(num) + 
+	          " " + note + "\r\n";
+	header += "Content-Type: text/html\r\n";
+	if(! keepAlive_) header += "Connection: close\r\n";
+	
+	body += "<html><title>呀~出错了</title>";
+	body += "<body>" + std::to_string(num) + " " + note;
+	body += "<hr /><em>ZhangWen's WebServer</em>";
+	body += "</body></html>";
+	
+	header += "Content-Length: " + std::to_string(body.size()) + "\r\n";
+	header += "Server: ZhangWen's WebServer\r\n\r\n";
+	
+	connection_->send(header);
+	connection_->send(body);
+}
+
+/* 应答正常请求 */
+void HttpHandler::onRequest(const std::string &body)
 {
 	std::string header;
+	
+	header += "HTTP/1.1 200 OK\r\n";
+	header += "Content-Type: text/html\r\n";
+	if(! keepAlive_) header += "Connection: close\r\n";
+	if(method_ != kHead)
+	{
+		header += "Content-Length: " + 
+	              std::to_string(body.size()) + "\r\n";
+	}
+	header += "Server: ZhangWen's WebServer\r\n\r\n";
+	
+	connection_->send(header);
+	if(method_ != kHead) 
+	{
+		connection_->send(body);
+	}
+}
+
+void HttpHandler::responseReq()
+{
+	std::string filename("source/");
+	std::string context;
 	/* 根据解析状态，响应Http请求 */
 	if(state_ != kPraseDone)
 	{
 		//bad request 400
-		header += "HTTP/1.1 400 Bad Request\r\n\r\n";
-		connection_->send(header);
-		
+		badRequest(400, "bad request");
 		return ;
 	}
 	
 	/* 解析请求资源 */
 	if(path_ == "/")
 	{
-		header += "HTTP/1.1 200 OK\r\n";
-		connection_->send(header);
+		//默认返回index.html页面
+		filename += "index.html";
+	}
+	else 
+	{
+		if(::access((filename+path_).c_str(), F_OK) < 0)
+		{
+			//404 Not Found
+			badRequest(404, "Not Found");
+			return ;
+		}
+		filename += path_;
 	}
 	
+	/* 返回页面 */
+	struct stat st;
+	if(unlikely(::stat(filename.c_str(), &st)<0))
+	{
+		perror("stat");
+		//404 Not Found
+		badRequest(404, "Not Found");
+		return ;
+	}
 	
-	//404 Not Found
+	int fd = ::open(filename.c_str(), O_RDONLY);
+	if(unlikely(fd<0))
+	{
+		perror("open");
+		//404 Not Found
+		badRequest(404, "Not Found");
+		return ;
+	}
 	
+	void *mapFile = ::mmap(NULL, st.st_size, PROT_READ, 
+	                       MAP_PRIVATE, fd, 0);
+	if(mapFile == MAP_FAILED)
+	{
+		perror("mmap");
+		//404 Not Found
+		badRequest(404, "Not Found");
+		return ;
+	}
+	
+	char *pf = static_cast<char *>(mapFile);
+	context = std::string(pf, pf + st.st_size);
+	onRequest(context);
+	
+	::close(fd);
+	::munmap(mapFile, st.st_size);
 }
 
+void HttpHandler::keepAliveHandle(void)
+{
+	if(! keepAlive_) 
+	{
+		/* 关闭非keepalive连接，并返回 */
+		connection_->setState(HttpConnection::kDisConnecting);
+		connection_->shutdown(SHUT_RD);	/* 关闭读半部 */
+		
+		/* 正常关闭流程 */
+		/* HttpConnnection::handleWrite写完时，关闭连接 */
+		return ;
+	}
+	
+	/* 刷新keepalive时间 */
+	loop_->flushKeepAlive(connection_->getChannel(), timerNode_);
+	
+	/* 清理工作，为下次接受请求做准备 */
+	header_.clear();
+	body_.clear();
+	path_.clear();
+	state_ = kStart;
+	
+	/* 重置Httpconnection状态 */
+	connection_->setState(HttpConnection::kConnected);
 }
+
+}//namespace webserver

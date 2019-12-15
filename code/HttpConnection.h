@@ -15,14 +15,7 @@ class HttpConnection
 {
 public:
 	typedef std::shared_ptr<Channel> SP_Channel;
-	
-	enum ConnState{ Connected=0x0, //初始状态
-	                RecvReq,       //接受client请求
-                    SendRsp,       //响应请求
-					Error,         //遭遇错误
-	                DisConnected,  //断开连接
-					ConnSize
-				  };
+	enum ConnState{ kConnected=0x0, kHandle, kError, kDisConnecting, kDisconnected };
 	
 	HttpConnection(EventLoop *loop, int connfd);
 	~HttpConnection();
@@ -43,15 +36,19 @@ public:
 	std::string getRecvBuffer() 
 	{ 
 		std::string buf;
-		std::swap(buf, __in_buffer);/* 上层读取完数据，__in_buffer置空 */
+		/* 上层读取完数据，__in_buffer置空 */
+		std::swap(buf, __in_buffer);
 		
 		return buf;
 	}
 	
 	void setHolder(std::shared_ptr<HttpHandler> handler)
-	{
-		holder_ = handler;
-	}
+	{ holder_ = handler; }
+	
+	/* 供HttpHandler使用 */
+	ConnState getState() const { return state_; }
+	void setState(ConnState state) { state_ = state; }
+	void shutdown(int how);
 	
 private:
 	EventLoop *loop_;
@@ -61,9 +58,8 @@ private:
 	std::string __out_buffer;
 	
 	std::weak_ptr<HttpHandler> holder_;	/* 延长HttpHandler的生命周期 */
-	int state;
+	ConnState state_;
 };
-
 
 }
 

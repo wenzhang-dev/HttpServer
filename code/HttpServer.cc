@@ -59,8 +59,6 @@ void HttpServer::acceptor()
 	InetAddress addr(0);
 	int connfd;
 	
-	printf("acceptor\n");
-	
 	//edge trigger mode
 	while((connfd = utils::AcceptNb(listenFd_, addr)) > 0 || errno == EMFILE)
 	{
@@ -77,11 +75,10 @@ void HttpServer::acceptor()
 		EventLoop *loop = threadPool_->getNextLoop();
 
 		std::shared_ptr<HttpHandler> handler(new HttpHandler(loop, connfd));
-		loop->queueInLoop(std::bind(&HttpHandler::newConnection, handler));	
+		loop->queueInLoop(std::bind(&EventLoop::addHttpConnection, loop, handler));	
 		
 		printf("fd=%d, %s\n", connfd, addr.toIpPortString().c_str());
 	}
-	//acceptChannel_->enableReading();
 }
 
 }//namespace webserver

@@ -6,8 +6,6 @@
 #include "EventLoop.h"
 #include "utils.h"
 
-/* 先完成读写功能!!! */
-/* 进一步：由HttpConnection关闭连接（非keep-alive） */
 namespace webserver
 {
 
@@ -15,14 +13,14 @@ HttpConnection::HttpConnection(EventLoop *loop, int connfd)
 	: loop_(loop),
 	  connfd_(connfd),
 	  channel_(new Channel(connfd, loop_)),
-	  state(Connected)
+	  state_(kConnected)
 {
 	assert(connfd > 0);
 }
 
 HttpConnection::~HttpConnection()
 {
-	printf("dtor HttpConnection\n");
+	//printf("dtor HttpConnection\n");
 }
 
 void HttpConnection::setDefaultCallback()
@@ -31,80 +29,91 @@ void HttpConnection::setDefaultCallback()
 	channel_->setWriteCallback(std::bind(&HttpConnection::handleWrite, this));
 	channel_->setCloseCallback(std::bind(&HttpConnection::handleClose, this));
 	channel_->setErrorCallback(std::bind(&HttpConnection::handleError, this));
-	
-	//channel_->enableReading();
 }
 
 /* client发送数据 */
 /* HttpConnection自动读入缓冲区 */
 void HttpConnection::handleRead(void)
 {
-	printf("handleRead\n");
-
 	assert(loop_->isInLoopThread());
 	
-	int bytes = utils::readn(connfd_, __in_buffer);
+	bool isZero = false;
+	int bytes = utils::readn(connfd_, __in_buffer, isZero);
 	if(bytes < 0)
 	{
-		state = Error;
+		state_ = kError;
 		handleError();
 		return ;
 	}
-	
-#if 0
-	else if(bytes == 0)
+	else if(bytes == 0 && state_ == kConnected)	
 	{
-		state = DisConnected;
+		/* 第一次请求到来，但读到字节数为0 */
+		/* request abort */
+		state_ = kDisconnected;
 		handleClose();
 		return ;
 	}
-#endif
-
-	state = RecvReq;
+	else if(isZero)
+	{
+		/* 正常收到数据，对端可能调用shutdown或close */
+		state_ = kDisConnecting;
+		channel_->disableReading();
+		utils::Shutdown(connfd_, SHUT_RD);	/* 关闭读半部 */
+		/* HttpHandler需尝试发送应答后，再关闭连接 */
+		return ;
+	}
+	
+	/* everything is right */
+	state_ = kHandle;
 }
 
 void HttpConnection::handleWrite(void)
 {
-	printf("handleWrite\n");
-	
 	assert(loop_->isInLoopThread());
 	int bytes = utils::writen(connfd_, __out_buffer);
-	/* 关闭写监控 */
-	if(__out_buffer.size() == 0)
+	
+	if(__out_buffer.size() == 0) 
 	{
+		/* 关闭写监控 */
 		channel_->disableWriting();
+		/* 对端已关闭写半部 */
+		/* 此时，发送完应答，就可以关闭连接 */
+		if(state_ == kDisConnecting)
+		{
+			state_ = kDisconnected;		
+			handleClose();
+			return ;
+		}
 	}
 	
-	if(bytes < 0)
+	if(bytes < 0)	/* 对端可能关闭连接 */
 	{
-		state = Error;
+		state_ = kDisconnected;
 		channel_->disableWriting();
-		handleError();
+		handleClose();
 	}
-	
-	state = SendRsp;
 }
 
 void HttpConnection::handleClose(void)
 {
-	printf("handleClose\n");
-	
 	assert(loop_->isInLoopThread());
+	assert(state_ == kDisconnected);
+	
 	/* 对方已关闭连接，web server直接关闭该套接字 */
 	std::shared_ptr<HttpHandler> guard = holder_.lock();
 	if(guard == nullptr) return ;	//TODO:
 	
 	channel_->disableAll();
 	loop_->removeChannel(channel_);
+	
+	/* 关闭文件描述符 */
+	utils::Close(connfd_);
 }
 
 void HttpConnection::handleError(void)
 {
-	printf("handleError\n");
-	
 	assert(loop_->isInLoopThread());
-	/* TODO: */
-	handleClose();
+	/* 由HttpHandler发出bad request 400应答 */
 }
 
 void HttpConnection::send(const void *data, int len)
@@ -117,17 +126,19 @@ void HttpConnection::send(const void *data, int len)
 	__out_buffer.resize(size+len);
 	std::copy(ptr, ptr+len, __out_buffer.begin()+size);
 	
-	//printf("write buffer:%s\n", __out_buffer.c_str());
-	
 	/* 使能写监控 */
 	channel_->enableWriting();
-	
 }
 
 void HttpConnection::send(const std::string &data)
 {
 	this->send(static_cast<const void *>(data.data()),
 	           static_cast<int>(data.size()));
+}
+
+void HttpConnection::shutdown(int how)
+{
+	utils::Shutdown(connfd_, how);
 }
 
 }

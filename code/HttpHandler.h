@@ -4,11 +4,14 @@
 #include <memory>
 #include <map>
 
+#include "HttpManager.h"
+
 namespace webserver
 {
 
 class EventLoop;
 class HttpConnection;
+class HttpManager;
 
 /* 持有HttpConnection */
 /* 负责解析Http协议，并给予Http应答 */
@@ -34,6 +37,9 @@ private:
 	int praseHeader(std::string &buf, int bpos);
 	int praseBody(std::string &buf, int bpos);
 	void responseReq();
+	void keepAliveHandle();
+	void badRequest(int num, const std::string &note);
+	void onRequest(const std::string &body);
 	
 	void setMethod(const std::string &method)
 	{
@@ -78,6 +84,12 @@ private:
 	std::map<std::string, std::string> header_;
 	std::string path_;
 	std::string body_;
+	bool keepAlive_;
+	
+	/* 变量类型不大理想 */
+	HttpManager::TimerNode timerNode_;
+	
+	friend class HttpManager;
 };
 
 }

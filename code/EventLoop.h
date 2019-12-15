@@ -8,6 +8,7 @@
 #include <unordered_map>
 
 #include "CurrentThread.h"
+#include "HttpManager.h"
 
 namespace webserver
 {
@@ -15,6 +16,7 @@ namespace webserver
 class Epoll;
 class Channel;
 class HttpHandler;
+class HttpManager;
 
 class EventLoop
 {
@@ -50,7 +52,9 @@ public:
 	
 	static EventLoop* getEventLoopOfCurrentThread();
 	
-	void addHttpConnection(SP_HttpHandler handler, SP_Channel channel);
+	/* support Http */
+	void addHttpConnection(SP_HttpHandler handler);
+	void flushKeepAlive(SP_Channel &channel, HttpManager::TimerNode &node);
 	
 private:
 	bool looping_;
@@ -68,7 +72,7 @@ private:
 	/* 由事件循环处理各个Http请求 */
 	/* 先调用Channel的handleEvent，接受数据 */
 	/* 各个事件循环管理Http连接（通断，清理） */
-	std::unordered_map<SP_Channel, SP_HttpHandler> httpMap;
+	std::unique_ptr<HttpManager> manager_;
 };
 
 }

@@ -10,6 +10,8 @@ namespace webserver
 {
 
 class EventLoop;
+struct channelHash;
+struct channelCmp;
 
 /* event dispatcher
  * obligation: handle activate events in this file descriptor 
@@ -21,7 +23,10 @@ public:
 	typedef std::function<void ()> EventCallback;
 
 	Channel(int fd, EventLoop *loop);
-	~Channel(){ printf("dtor channel\n"); }
+	~Channel()
+	{ 
+		//printf("dtor channel\n"); 
+	}
 	
 	/* event dispatcher */
 	void handleEvent();
@@ -62,6 +67,12 @@ public:
 	bool isReading() const 
 	{ return revents_ & kReadEvent; }
 
+	bool isEnableReading() const 
+	{ return events_ & kReadEvent; }
+
+	bool isEnableWriting() const
+	{ return events_ & kWriteEvent; }
+
 	EventLoop *ownerLoop() const 
 	{ return loop_; }
 	
@@ -83,6 +94,23 @@ private:
 	static const int kNoneEvent = 0;
 	static const int kReadEvent = EPOLLIN | EPOLLPRI;
 	static const int kWriteEvent = EPOLLOUT;
+};
+
+struct channelHash
+{
+	std::size_t operator()(const std::shared_ptr<Channel> &key) const
+	{ 
+		return std::hash<int>()(key->getFd());
+	}
+};
+
+struct channelCmp
+{
+	bool operator()(const std::shared_ptr<Channel> &lhs, 
+	                const std::shared_ptr<Channel> &rhs) const
+	{
+		return lhs->getFd() < rhs->getFd();
+	}
 };
 
 } //namespace webserver

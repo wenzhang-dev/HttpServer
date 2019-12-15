@@ -101,9 +101,18 @@ void setReuseAddr(int sockfd, bool on)
                &optval, sizeof optval);
 }
 
+void Shutdown(int sockfd, int how)
+{
+	int ret = ::shutdown(sockfd, how);
+	if(unlikely(ret<0))
+	{
+		perror("shutdown");
+	}
+}
+
 /* ET mode */
 /* 读写直到EAGAIN */
-int readn(int sockfd, std::string &io_buf)
+int readn(int sockfd, std::string &io_buf, bool &isZero)
 {
 	char buf[MAX_BUFSIZE];
 	int nbytes;
@@ -115,7 +124,12 @@ int readn(int sockfd, std::string &io_buf)
 		{
 			if(errno == EINTR) continue;
 			if(errno == EAGAIN) return totalSize;
-			if(nbytes == 0) return -2;	/* 对方连接断开 */
+			if(nbytes == 0)	/* 读0 */
+			{
+				isZero = true;
+				break;
+			}
+			
 			return -1;
 		}
 		
@@ -140,6 +154,7 @@ int writen(int sockfd, std::string &io_buf)
 		{
 			if(errno == EINTR) continue;
 			if(errno == EAGAIN) break;
+			//if(errno == EPIPE)
 			
 			io_buf.clear();
 			return -1;

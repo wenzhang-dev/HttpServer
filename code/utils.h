@@ -16,10 +16,11 @@ int SocketBindListen(const webserver::InetAddress &addr);
 void Close(int sockfd);
 
 int AcceptNb(int sockfd, webserver::InetAddress &addr);
-int readn(int sockfd, std::string &io_buf);
+int readn(int sockfd, std::string &io_buf, bool &isZero);
 int writen(int sockfd, std::string &io_buf);
 
 void setReuseAddr(int sockfd, bool on);
+void Shutdown(int sockfd, int how);
 
 } //namespace utils
 

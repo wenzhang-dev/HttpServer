@@ -16,7 +16,6 @@ Channel::Channel(int fd, EventLoop *loop)
 /* event dispatcher */
 void Channel::handleEvent()
 {
-	printf("handleEvent\n");
 	if((revents_ & EPOLLHUP) && !(revents_ & EPOLLIN))
 	{
 		if(closeCallback_) closeCallback_();

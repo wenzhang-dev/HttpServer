@@ -9,6 +9,7 @@
 #include "Channel.h"
 #include "CurrentThread.h"
 #include "HttpHandler.h"
+#include "HttpManager.h"
 
 namespace webserver
 {
@@ -34,7 +35,8 @@ EventLoop::EventLoop()
 	  poller_(new Epoll()),
 	  wakeupFd_(createEventFd()),
 	  wakeupChannel_(new Channel(wakeupFd_, this)),
-	  callingPendingFucntors_(false)
+	  callingPendingFucntors_(false),
+	  manager_(new HttpManager(this))
 {
 	if(unlikely(t_loopInThisThread))
 	{
@@ -47,7 +49,7 @@ EventLoop::EventLoop()
 	/* may be wakeuped from other thread */
 	wakeupChannel_->setReadCallback(
 		std::bind(&EventLoop::wakeupRead, this));
-	wakeupChannel_->enableReading();	/* core dump, why??? */
+	wakeupChannel_->enableReading();
 }
 
 EventLoop::~EventLoop()
@@ -84,11 +86,7 @@ void EventLoop::loop()
 			/* 根据状态反馈Http */
 			/* acceptFd_, wakeupfd是没有插入到httpMap */
 			/* 上诉fd，不进入该分支 */
-			if(it->isReading() && httpMap.count(it))
-			{
-				SP_HttpHandler &handler = httpMap[it];
-				handler->handleHttpReq();
-			}
+			manager_->handler(it);
 		}
 		
 		/* handle extra functors */
@@ -183,12 +181,17 @@ void EventLoop::updateChannel(SP_Channel channel)
 void EventLoop::removeChannel(SP_Channel channel)
 { 
 	poller_->removeChannel(channel);
-	httpMap.erase(channel);
+	manager_->delHttpConnection(channel);
 }
 
-void EventLoop::addHttpConnection(SP_HttpHandler handler, SP_Channel channel)
+void EventLoop::addHttpConnection(SP_HttpHandler handler)
 {
-	httpMap.insert(make_pair(channel, handler));
+	manager_->addNewHttpConnection(handler);
+}
+
+void EventLoop::flushKeepAlive(SP_Channel &channel, HttpManager::TimerNode &node)
+{
+	manager_->flushKeepAlive(channel, node);
 }
 
 } //namespace webserver

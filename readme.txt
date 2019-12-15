@@ -161,4 +161,5 @@ find_first_of和find区别
 最棘手的问题
 	epoll中EPOLLOUT重复触发，取消监听EPOLLOUT事件也是如此
 	添加EPOLLONESHOT也是如此
-	
+
+调用shutdown也会触发读0，而此时应该发送完数据后才关闭连接

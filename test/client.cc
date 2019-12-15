@@ -20,18 +20,18 @@ int main(int argc, char *argv[])
 	
 	connect(sockfd, (sockaddr *)&server_addr, addrlen);
 	
-	std::string packet = "POST / HTTP/1.1\r\n";
+	std::string packet = "POST / HTTP/1.0\r\n";
 	packet += "Host: www.baidu.com\r\n";
 	packet += "User-Agent: curl/7.47.0\r\n";
 	packet += "Accept: */*\r\n";
-	packet += "Content-length: 12\r\n\r\n";
-	packet += "Hello,World!";
+	packet += "Content-length: 20\r\n\r\n";
+	packet += "Hello, I'm a client!";
 	
 	ssize_t num = write(sockfd, packet.c_str(), (int)packet.size());
 	(void)num;
 	printf("%s\n", packet.c_str());
 	
-	sleep(2);
+	//sleep(3);
 	
 	char buffer[1024]={0};
 	num = read(sockfd, buffer, sizeof(buffer));
@@ -39,8 +39,13 @@ int main(int argc, char *argv[])
 	printf("Http Ack:\n%s\n", buffer);
 	
 	shutdown(sockfd, SHUT_WR);
+	shutdown(sockfd, SHUT_WR);
+	
+	//sleep(15);
+	
 	close(sockfd);
-
+	printf("End\n");
+	
 #if 0
 	char buf[4096];
 	while(fgets(buf, sizeof(buf), stdin))
