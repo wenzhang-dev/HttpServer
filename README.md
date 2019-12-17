@@ -2,6 +2,8 @@ HttpServer
 ==========
 A webserver developed using modern c++
 
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 # Introduction
 该项目参考muduo实现了一个多线程静态的web服务器。HttpServer使用c++11实现，支持head、post和get请求，使用<br>
 epoll ET边沿触发提高实时性。HttpServer支持短连接、长连接，和采用timerfd实现的应用层心跳。
