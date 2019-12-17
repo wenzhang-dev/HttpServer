@@ -25,8 +25,12 @@ gcc-5.4, g++-5.4
 ![architecture](!pic/architecture.png)
 
 # Performance Test
-使用webbench，在10k keepalive Http连接下的表现。<br>
-![test](pic/10k-keepalive-8threads.png)
+使用webbench，测试non-keepalive和keepalive Http连接下的表现。<br>
+* 10k 长连接测试
+![test1](pic/10k-keepalive-8threads.png)
+
+* 1k 短链接测试
+![test2](pic/1k-non-keepalive-4threads.png)
 
 # Others
 * 代码统计<br>
