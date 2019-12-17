@@ -40,6 +40,6 @@ gcc-5.4, g++-5.4
 使用valgrid中memcheck工具，检测HttpServer内存泄露情况。<br>
 检测方法: ./memcheck.sh<br>
 
-* 监控
+* 监控<br>
 使用top命令和/proc/${PID}/中内省，检测HttpServer运行时CPU利用率，内存以及文件描述符使用情况。<br>
 使用方法: ./monitor.sh<br>
