@@ -1,6 +1,7 @@
 #include "Channel.h"
 
 #include "EventLoop.h"
+#include "utils.h"
 
 namespace webserver
 {
@@ -12,6 +13,13 @@ Channel::Channel(int fd, EventLoop *loop)
 	  revents_(0),
 	  loop_(loop)
 {}
+
+/* Channel负责关闭文件描述符 */
+Channel::~Channel()
+{
+	//printf("dtor channel\n");
+	utils::Close(fd_);
+}
 
 /* event dispatcher */
 void Channel::handleEvent()

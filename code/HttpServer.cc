@@ -35,6 +35,7 @@ HttpServer::HttpServer(EventLoop *loop, const InetAddress &addr, int numThreads)
 	assert(idleFd_ > 0);
 	
 	utils::setReuseAddr(listenFd_, true);
+	utils::IgnoreSigpipe();
 }
 
 HttpServer::~HttpServer()
@@ -78,6 +79,7 @@ void HttpServer::acceptor()
 		loop->queueInLoop(std::bind(&EventLoop::addHttpConnection, loop, handler));	
 		
 		printf("fd=%d, %s\n", connfd, addr.toIpPortString().c_str());
+		
 	}
 }
 

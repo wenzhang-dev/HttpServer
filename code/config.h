@@ -6,7 +6,7 @@
 #define SOCKET_MAXBACKLOG 	2048
 #define MAX_BUFSIZE 		1024
 
-#define MAX_HTTPEXPIRETIME	10
-
+/* keep-alive连接超时时间(s) */
+#define MAX_HTTPEXPIRETIME	120
 
 #endif

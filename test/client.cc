@@ -20,7 +20,7 @@ int main(int argc, char *argv[])
 	
 	connect(sockfd, (sockaddr *)&server_addr, addrlen);
 	
-	std::string packet = "POST / HTTP/1.0\r\n";
+	std::string packet = "POST / HTTP/1.1\r\n";
 	packet += "Host: www.baidu.com\r\n";
 	packet += "User-Agent: curl/7.47.0\r\n";
 	packet += "Accept: */*\r\n";

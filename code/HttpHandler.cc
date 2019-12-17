@@ -62,6 +62,13 @@ void HttpHandler::handleHttpReq()
 		goto __err;
 	}
 	
+	/* 请求到来，但无数据 */
+	if(buffer.empty()) 
+	{
+		state_ = kStart;
+		goto __err;
+	}
+	
 	epos = praseUrl(buffer, bpos);
 	if(unlikely(epos < 0))
 	{
@@ -112,6 +119,7 @@ int HttpHandler::praseUrl(std::string &buf, int bpos)
 	space = buf.find(" ", bpos);
 	if(space == std::string::npos || space > epos) return -1;
 	setPath(buf.substr(bpos, space-bpos));
+	if(path_.empty() || path_[0] != '/') return -1;
 	
 	/* 解析Http版本号 */
 	bpos = space+1;
@@ -151,11 +159,18 @@ int HttpHandler::praseHeader(std::string &buf, int bpos)
 	}
 	
 	/* Keepalive判断 */
-	if(header_.count("Connection") && 
-	  (header_["Connection"] == "keep-alive" || 
-	   header_["Connection"] == "Keep-Alive"))
-	{ 
-		keepAlive_ = true; 
+	if(header_.count("Connection"))
+	{
+		if(header_["Connection"] == "keep-alive" || 
+	       header_["Connection"] == "Keep-Alive") 
+		{
+			keepAlive_ = true;
+		}
+		else if(header_["Connection"] == "close" ||
+		        header_["Connection"] == "Close")
+		{
+			keepAlive_ = false;
+		}
 	}
 
 #if DEBUG
@@ -199,7 +214,9 @@ void HttpHandler::badRequest(int num, const std::string &note)
 	header += "HTTP/1.1 " + std::to_string(num) + 
 	          " " + note + "\r\n";
 	header += "Content-Type: text/html\r\n";
+	
 	if(! keepAlive_) header += "Connection: close\r\n";
+	else             header += "Connection: Keep-Alive\r\n";
 	
 	body += "<html><title>呀~出错了</title>";
 	body += "<body>" + std::to_string(num) + " " + note;
@@ -220,7 +237,10 @@ void HttpHandler::onRequest(const std::string &body)
 	
 	header += "HTTP/1.1 200 OK\r\n";
 	header += "Content-Type: text/html\r\n";
+	
 	if(! keepAlive_) header += "Connection: close\r\n";
+	else             header += "Connection: Keep-Alive\r\n";
+	
 	if(method_ != kHead)
 	{
 		header += "Content-Length: " + 
@@ -239,6 +259,7 @@ void HttpHandler::responseReq()
 {
 	std::string filename("source/");
 	std::string context;
+	
 	/* 根据解析状态，响应Http请求 */
 	if(state_ != kPraseDone)
 	{
@@ -255,13 +276,23 @@ void HttpHandler::responseReq()
 	}
 	else 
 	{
-		if(::access((filename+path_).c_str(), F_OK) < 0)
+		/* 不能原地赋值!! */
+		std::string path = path_.substr(1);
+		
+		//for webbench test!
+		if(path == "hello")
+		{
+			std::string hello("Hello, I'm WebServer.");
+			onRequest(hello);
+			return ;
+		}
+		else if(::access((filename+path).c_str(), F_OK) < 0)
 		{
 			//404 Not Found
 			badRequest(404, "Not Found");
 			return ;
 		}
-		filename += path_;
+		filename += path;
 	}
 	
 	/* 返回页面 */
@@ -275,7 +306,7 @@ void HttpHandler::responseReq()
 	}
 	
 	int fd = ::open(filename.c_str(), O_RDONLY);
-	if(unlikely(fd<0))
+	if(unlikely(fd < 0))
 	{
 		perror("open");
 		//404 Not Found
@@ -307,12 +338,17 @@ void HttpHandler::keepAliveHandle(void)
 	{
 		/* 关闭非keepalive连接，并返回 */
 		connection_->setState(HttpConnection::kDisConnecting);
+		connection_->getChannel()->disableReading();
 		connection_->shutdown(SHUT_RD);	/* 关闭读半部 */
 		
 		/* 正常关闭流程 */
 		/* HttpConnnection::handleWrite写完时，关闭连接 */
 		return ;
 	}
+	
+	/* keepalive预关闭 */
+	HttpConnection::ConnState connState = connection_->getState();
+	if(connState == HttpConnection::kDisConnecting) return ;
 	
 	/* 刷新keepalive时间 */
 	loop_->flushKeepAlive(connection_->getChannel(), timerNode_);
@@ -324,7 +360,7 @@ void HttpHandler::keepAliveHandle(void)
 	state_ = kStart;
 	
 	/* 重置Httpconnection状态 */
-	connection_->setState(HttpConnection::kConnected);
+	connection_->setState(HttpConnection::kHandle);
 }
 
 }//namespace webserver

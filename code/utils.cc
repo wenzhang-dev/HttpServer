@@ -4,6 +4,8 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <netinet/tcp.h>
+#include <signal.h>
+#include <strings.h>
 
 #include "config.h"
 #include "macros.h"
@@ -110,6 +112,19 @@ void Shutdown(int sockfd, int how)
 	}
 }
 
+void IgnoreSigpipe()
+{
+	struct sigaction sa;
+	bzero(&sa, sizeof(sa));
+	
+	sa.sa_handler = SIG_IGN;
+	sa.sa_flags = 0;
+	if(unlikely(sigaction(SIGPIPE, &sa, NULL) < 0))
+	{
+		perror("sigaction");
+	}
+}
+
 /* ET mode */
 /* 读写直到EAGAIN */
 int readn(int sockfd, std::string &io_buf, bool &isZero)
@@ -150,7 +165,7 @@ int writen(int sockfd, std::string &io_buf)
 	while(totalSize < bufSize)
 	{
 		if((nbytes = ::write(sockfd, pstr +	totalSize, 
-		                     bufSize-totalSize)) < 0)
+		                     bufSize-totalSize)) <= 0)
 		{
 			if(errno == EINTR) continue;
 			if(errno == EAGAIN) break;

@@ -163,3 +163,11 @@ find_first_of和find区别
 	添加EPOLLONESHOT也是如此
 
 调用shutdown也会触发读0，而此时应该发送完数据后才关闭连接
+
+open: Too many open files??
+	文件描述符耗尽，默认值为最大能打开1024个。
+	ulimit -n 65535 手动更改进程能打开最大文件数
+	
+分析coredump文件
+	ubuntu默认不产生coredump文件
+	使用ulimit -u unlimited开启

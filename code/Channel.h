@@ -23,10 +23,7 @@ public:
 	typedef std::function<void ()> EventCallback;
 
 	Channel(int fd, EventLoop *loop);
-	~Channel()
-	{ 
-		//printf("dtor channel\n"); 
-	}
+	~Channel();
 	
 	/* event dispatcher */
 	void handleEvent();

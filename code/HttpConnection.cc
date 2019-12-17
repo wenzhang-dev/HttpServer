@@ -62,7 +62,7 @@ void HttpConnection::handleRead(void)
 		/* HttpHandler需尝试发送应答后，再关闭连接 */
 		return ;
 	}
-	
+
 	/* everything is right */
 	state_ = kHandle;
 }
@@ -71,7 +71,6 @@ void HttpConnection::handleWrite(void)
 {
 	assert(loop_->isInLoopThread());
 	int bytes = utils::writen(connfd_, __out_buffer);
-	
 	if(__out_buffer.size() == 0) 
 	{
 		/* 关闭写监控 */
@@ -89,7 +88,6 @@ void HttpConnection::handleWrite(void)
 	if(bytes < 0)	/* 对端可能关闭连接 */
 	{
 		state_ = kDisconnected;
-		channel_->disableWriting();
 		handleClose();
 	}
 }
@@ -97,7 +95,8 @@ void HttpConnection::handleWrite(void)
 void HttpConnection::handleClose(void)
 {
 	assert(loop_->isInLoopThread());
-	assert(state_ == kDisconnected);
+	/* Channel有信号可直接触发 */
+	//assert(state_ == kDisconnected);	
 	
 	/* 对方已关闭连接，web server直接关闭该套接字 */
 	std::shared_ptr<HttpHandler> guard = holder_.lock();
@@ -107,13 +106,16 @@ void HttpConnection::handleClose(void)
 	loop_->removeChannel(channel_);
 	
 	/* 关闭文件描述符 */
-	utils::Close(connfd_);
+	//utils::Close(connfd_);//文件描述符绑定在Channel上了
 }
 
 void HttpConnection::handleError(void)
 {
 	assert(loop_->isInLoopThread());
-	/* 由HttpHandler发出bad request 400应答 */
+	
+	/* 读写已关闭的文件，触发异常 */
+	state_ = kDisconnected;		
+	handleClose();
 }
 
 void HttpConnection::send(const void *data, int len)

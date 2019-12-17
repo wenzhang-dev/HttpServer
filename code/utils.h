@@ -22,6 +22,8 @@ int writen(int sockfd, std::string &io_buf);
 void setReuseAddr(int sockfd, bool on);
 void Shutdown(int sockfd, int how);
 
+void IgnoreSigpipe();
+
 } //namespace utils
 
 } //namespace webserver

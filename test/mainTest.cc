@@ -3,9 +3,10 @@
 #include "EventLoop.h"
 #include "InetAddress.h"
 
+/* 8核16线程 */
 int main(int argc, char *argv[])
 {
-	webserver::InetAddress self_addr("127.0.0.1", 20000);
+	webserver::InetAddress self_addr(20000);
 	webserver::EventLoop mainLoop;
 	
 	webserver::HttpServer server(&mainLoop, self_addr, 3);
