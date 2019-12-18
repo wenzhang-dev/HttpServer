@@ -1,45 +1,46 @@
-HttpServer
+HttpServer Project
 ==========
-A webserver developed using modern c++
+A webserver developed using modern c++<br>
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 # Introduction
-该项目参考muduo实现了一个多线程静态的web服务器。HttpServer使用c++11实现，支持head、post和get请求，使用<br>
-epoll ET边沿触发提高实时性。HttpServer支持短连接、长连接，和采用timerfd实现的应用层心跳。
+This project implements a multithreaded static web server with reference to Muduo. HttpServer is implemented with C++ 11, it supports head, post and get requests, and uses epoll ET edge trigger to improve real-time performance. HttpServer supports short connection, long connection and application layer heartbeat implemented by timerfd.
 
 # Environment
-Ubuntu 16.04, i5-8G<br>
-gcc-5.4, g++-5.4
+Ubuntu 16.04;<br>
+i5-8G;<br>
+gcc-5.4;<br>
+g++-5.4;<br>
 
 # Usage
-* 编译<br>
+* compilation<br>
     make -j4<br>
-    cd webbench && make
-* 运行<br>
+    cd webbench && make<br>
+* Function<br>
     ./run.sh<br>
     ./webbench.sh
     
 # Architecture
-该项目采用reactor+NIO+thread pool+epoll ET的模型设计而成。<br>
+The project is designed with the model of reactor + NIO + thread pool + epoll ET.<br>
 ![architecture](!pic/architecture.png)
 
 # Performance Test
-使用webbench，测试non-keepalive和keepalive Http连接下的表现。<br>
-* 10k 长连接测试
+This project uses webbench to test the performance of non-keepalive and keepalive HTTP connections<br>
+* 10k Long connection test<br>
 ![test1](pic/10k-keepalive-8threads.png)
 
-* 1k 短链接测试
+* 1k Short link test<br>
 ![test2](pic/1k-non-keepalive-4threads.png)
 
 # Others
-* 代码统计<br>
+* Code statistics<br>
 ![code](pic/code.png)
 
-* 内存泄露检测<br>
-使用valgrid中memcheck工具，检测HttpServer内存泄露情况。<br>
-检测方法: ./memcheck.sh<br>
+* Memory leak detection<br>
+This project uses MemCheck tool in valgrid to detect httpServer memory leak.<br>
+Test method: ./memcheck.sh<br>
 
-* 监控<br>
-使用top命令和/proc/${PID}/中内省，检测HttpServer运行时CPU利用率，内存以及文件描述符使用情况。<br>
-使用方法: ./monitor.sh<br>
+* Monitor<br>
+This project uses the top command and /proc/${PID}/ introspection to detect httpserver runtime CPU utilization, memory, and file descriptor usage.<br>
+Usage method: ./monitor.sh<br>
