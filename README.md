@@ -22,7 +22,7 @@ gcc-5.4 g++-5.4<br>
     
 # Architecture
 该项目采用经典的reactor+NIO+thread pool+epoll ET模型设计而成。利用多核的优势，可显著提升实时响应能力。<br>
-![architecture](!pic/1.svg)
+![architecture](pic/1.png)
 
 # Performance Test
 使用linux压测工具webbench，分别测试10k连接下，keepAlive和non-keepAlive请求。<br>
