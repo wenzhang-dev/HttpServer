@@ -22,7 +22,7 @@ webbench: webbench.o Makefile
 	$(CC) $(CFLAGS) $(LDFLAGS) -o webbench webbench.o $(LIBS) 
 
 clean:
-	-rm -f *.o webbench *~ core *.core tags
+	-rm -f *.o webbench *~ core *.core tags *.log
 	
 tar: clean
 	-debian/rules clean

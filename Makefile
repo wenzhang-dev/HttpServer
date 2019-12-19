@@ -37,4 +37,7 @@ clean:
 	@rm -f ${TargetName}
 	@find . -name "*.o" -o -name "*.out" | xargs rm -f
 	@echo "[clean] done!"
-	
+
+.PHONY : distclean
+distclean: clean
+	@rm -rf *.log
